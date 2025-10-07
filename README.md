@@ -16,7 +16,9 @@ Then create and activate your conda environment:
 conda create -n GAR-project 
 conda activate GAR-project
 conda install pip
-pip install -r requirements.txt --index-url https://download.pytorch.org/whl/cu124
+# pip install -r requirements.txt --index-url https://download.pytorch.org/whl/cu124
+pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cu124
+
 ```
 
 ### (Optional) Setup you command line interface for better readability
