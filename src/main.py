@@ -4,7 +4,7 @@ import torch.optim as optim
 import yaml
 
 # ----- load config -----
-cfg = yaml.safe_load(open("configs/config.yaml"))
+cfg = yaml.safe_load(open("src/configs/config.yaml"))
 
 # ----- toy dataset -----
 x = torch.randn(500, 10)
