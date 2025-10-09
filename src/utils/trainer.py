@@ -16,7 +16,7 @@ from torch.utils.tensorboard import SummaryWriter
 from sklearn.metrics import confusion_matrix, classification_report, f1_score
 
 from .logger import setup_logging
-# from helper import save_checkpoint, load_checkpoint
+from .helper import save_checkpoint, load_checkpoint
 
 
 class Trainer:
