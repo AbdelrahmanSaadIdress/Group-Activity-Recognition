@@ -96,99 +96,72 @@ def save_checkpoint(
         torch.save(checkpoint, best_path)
         print(f"🏆 Best model saved: {best_path}")
 
+import os
+import torch
+from glob import glob
 
-def load_checkpoint(config, model, optimizer=None, scheduler=None, scaler=None, test=False, path=None):
-    """Load the latest or best model checkpoint."""
-    checkpoints_folder = Path(config["Data"]["root"]) / config["About"]["models_folder"]
-    if not checkpoints_folder.exists():
-        raise FileNotFoundError(f"❌ Checkpoint folder not found: {checkpoints_folder}")
+def load_checkpoint(config, model, optimizer=None, scheduler=None, scaler=None,
+                    test=False, path=None):
+    """
+    Load model and optionally optimizer/scheduler/scaler states.
 
-    def get_latest(files_dict):
-        """Return latest checkpoint by max epoch."""
-        return files_dict[max(files_dict)] if files_dict else None
+    Supports:
+        - Direct path load
+        - Best checkpoint load
+        - Continue (latest) checkpoint load
 
-    # --------------------------------------------------------------
-    # Load from a specific path
-    # --------------------------------------------------------------
-    if path:
-        if not Path(path).exists():
-            raise FileNotFoundError(f"❌ Specified checkpoint not found: {path}")
+    There is a manual for this function in /utils/manual.txt
+    """
 
-        cp = torch.load(path, map_location="cpu")
-        model.load_state_dict(cp["model_state_dict"])
+    checkpoints_dir = os.path.join(config['Data']['root'], config['About']['models_folder'])
+    os.makedirs(checkpoints_dir, exist_ok=True)
 
-        if optimizer and "optimizer_state_dict" in cp:
-            optimizer.load_state_dict(cp["optimizer_state_dict"])
-        if scheduler and "scheduler_state_dict" in cp:
-            scheduler.load_state_dict(cp["scheduler_state_dict"])
-        if scaler and "scaler_state_dict" in cp:
-            scaler.load_state_dict(cp["scaler_state_dict"])
+    # Step 1: Resolve which checkpoint to load
+    ckpt_path = None
 
-        print(f"✅ Loaded checkpoint from: {path}")
-        if config["About"].get("preload") == "cont":
-            return (
-                cp["epoch"],
-                cp["accuracy"],
-                cp["train_losses"],
-                cp["val_losses"],
-                cp["train_accuracies"],
-                cp["val_accuracies"],
-            )
-        return None
-
-    # --------------------------------------------------------------
-    # Automatically detect latest or best checkpoint
-    # --------------------------------------------------------------
-    epochs_checkpoints = {}
-    epochs_bests = {}
-
-    for f in checkpoints_folder.glob("*.pth"):
-        try:
-            name = f.name
-            epoch = int(name.split("__")[0].split("_")[1])
-            if name.startswith("checkpoint_"):
-                epochs_checkpoints[epoch] = f
-            elif name.startswith("best_"):
-                epochs_bests[epoch] = f
-        except Exception:
-            continue  # Skip malformed filenames
-
-    latest_checkpoint = get_latest(epochs_checkpoints)
-    latest_best = get_latest(epochs_bests)
-
-    preload_mode = config["About"].get("preload", "").lower()
-
-    if preload_mode == "best" or test:
-        if not latest_best:
-            raise FileNotFoundError("❌ No 'best' checkpoint found.")
-        cp = torch.load(latest_best, map_location="cpu")
-        model.load_state_dict(cp["model_state_dict"])
-        print(f"🏅 Loaded BEST checkpoint: {latest_best}")
-        return cp["epoch"]
-
-    elif preload_mode == "cont":
-        if not latest_checkpoint:
-            raise FileNotFoundError("❌ No checkpoint found for continuation.")
-        cp = torch.load(latest_checkpoint, map_location="cpu")
-        model.load_state_dict(cp["model_state_dict"])
-
-        if optimizer:
-            optimizer.load_state_dict(cp["optimizer_state_dict"])
-        if scheduler:
-            scheduler.load_state_dict(cp["scheduler_state_dict"])
-        if scaler:
-            scaler.load_state_dict(cp["scaler_state_dict"])
-
-        print(f"🔁 Resumed from checkpoint: {latest_checkpoint}")
-        return (
-            cp["epoch"],
-            cp["accuracy"],
-            cp["train_losses"],
-            cp["val_losses"],
-            cp["train_accuracies"],
-            cp["val_accuracies"],
-        )
-
+    if path:  # Manual path
+        ckpt_path = path
     else:
-        print("ℹ️ No checkpoint loading mode selected.")
-        return None
+        # Find all checkpoints
+        all_ckpts = sorted(glob(os.path.join(checkpoints_dir, "checkpoint_*.pth")))
+        best_ckpts = sorted(glob(os.path.join(checkpoints_dir, "best_*.pth")))
+
+        preload_mode = config['About'].get('preload', 'none')
+
+        if test or preload_mode == "best":
+            if best_ckpts:
+                ckpt_path = best_ckpts[-1]
+        elif preload_mode == "cont":
+            if all_ckpts:
+                ckpt_path = all_ckpts[-1]
+
+    if not ckpt_path:
+        print("⚠️ No checkpoint found — starting fresh.")
+        return 0, 0.0, [], [], [], []
+
+    # Step 2: Load checkpoint
+    print(f"🔄 Loading checkpoint from: {ckpt_path}")
+    checkpoint = torch.load(ckpt_path, map_location="cuda" if torch.cuda.is_available() else "cpu")
+
+    # Step 3: Restore model
+    model.load_state_dict(checkpoint['model_state_dict'], strict=False)
+
+    # Step 4: Restore optional training state (if available)
+    if optimizer and 'optimizer_state_dict' in checkpoint:
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    if scheduler and 'scheduler_state_dict' in checkpoint:
+        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+    if scaler and 'scaler_state_dict' in checkpoint:
+        scaler.load_state_dict(checkpoint['scaler_state_dict'])
+
+    # Step 5: Return info
+    epoch = checkpoint.get('epoch', 0)
+    accuracy = checkpoint.get('accuracy', 0.0)
+    train_losses = checkpoint.get('train_losses', [])
+    val_losses = checkpoint.get('val_losses', [])
+    train_accuracies = checkpoint.get('train_accuracies', [])
+    val_accuracies = checkpoint.get('val_accuracies', [])
+
+    print(f"✅ Loaded epoch {epoch} (acc={accuracy:.4f}) from {os.path.basename(ckpt_path)}")
+
+    return epoch, accuracy, train_losses, val_losses, train_accuracies, val_accuracies
