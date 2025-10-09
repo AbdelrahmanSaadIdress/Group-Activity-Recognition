@@ -115,3 +115,11 @@ print("Annotation keys:", list(annotations.keys())[:10])
 print("Type of keys:", [type(k) for k in list(annotations.keys())[:10]])
 
 print(annotations["48"])
+
+
+from helpers.logger import setup_logging
+
+logger = setup_logging("./experiments/run_01")
+logger.info("Starting annotation extraction...")
+logger.warning("Missing frames for match 35.")
+logger.error("Failed to process match 12.")
