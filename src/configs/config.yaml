@@ -1,4 +1,14 @@
-train:
-  epochs: 5
-  batch_size: 32
-  lr: 0.001
+# ==============================================================
+#           VOLLEYBALL GROUP ACTIVITY RECOGNITION CONFIG
+# ==============================================================
+
+dataset:
+  root: "/mnt/d/Desktop/04 Project/volleyball-datasets"
+
+  crops_annots_path: "/mnt/d/Desktop/04 Project/volleyball-datasets/volleyball_tracking_annotation/volleyball_tracking_annotation"
+  frames_annots_path: "/mnt/d/Desktop/04 Project/volleyball-datasets/volleyball_/videos"
+
+output:
+  save_dir: "./processed_data"
+
+
